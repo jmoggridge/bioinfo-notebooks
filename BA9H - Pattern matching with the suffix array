@@ -1,0 +1,107 @@
+# http://rosalind.info/problems/ba9h/
+
+# Pattern Matching with the Suffix Array
+
+
+import numpy as np
+
+class dnaSequence:
+    """A biomolecule sequence object"""
+    
+    def __init__(self, seq):
+        if seq [-1] != "$":
+            seq += "$"
+        self.seq = seq
+        self.bwt, self.sa = self.bw_transform()
+    
+    def bw_transform(self): 
+        """naive bwt with python sorted() on |text|^2 array"""
+        cycles = sorted([(self.seq[i:] + self.seq[:i], i) for i in range(len(self.seq))], key= lambda x: x[0])
+        bw = ''.join(cycle[0][-1] for cycle in cycles)
+        sa = [len(self.seq) - cycle[0].index('$')-1 for cycle in cycles]
+        return bw, sa
+    
+    def partial_suffix_array(self, k):
+        psa = [(counter, value) for counter, value in enumerate(self.sa) if value % k == 0] 
+        return psa
+#
+
+class BurrowsWheeler: 
+    """Takes a BWT string for pattern matching with list of text Patterns"""
+
+    def __init__(self, bw):
+        """BW constructor computes first_occurence of each symbol & symbol count array """
+
+        self.bw = bw
+        self.first_occur = self.first_occurence()
+        self.count = self.get_count()
+
+    def first_occurence(self):
+        """The index i at which each symbol first occurs in the first col, ie. lex. sorted(bw)"""
+        first_occur = {}
+        for i ,symbol in enumerate(sorted(self.bw)):
+            if symbol not in first_occur.keys():
+                first_occur[symbol] = i
+        return first_occur
+
+    def get_count(self):
+        """Cumulative count for each symbol s in alphabet, previous to index i in bw"""
+        alpha = sorted(set(self.bw))
+        count = {symbol:[0] for symbol in alpha}
+        for symbol in self.bw:
+            for s in alpha:
+                if symbol == s:
+                    count[s].append(count[s][-1]+1)
+                else:
+                    count[s].append(count[s][-1])
+        return count
+       
+    def decode(self):
+        """decodes the BWT to the original string text"""
+        last = [(symbol, self.count[symbol][index]) for index, symbol in enumerate(self.bw)]
+        first = sorted(last, key = lambda x: x[0])
+        decoded = ''
+        symbol = ('$',0)
+        while len(decoded)<len(last):
+            symbol = first[last.index(symbol)]
+            decoded += symbol[0]
+        return decoded
+
+    def pattern_match(self, pattern):
+        """BW matching using first occur and count data, constant-time indexing"""
+        top = 0
+        bottom = len(self.bw)
+        while bottom >= top:
+            if len(pattern)>0:
+                symbol = pattern[-1]
+            else:
+                return (top, bottom) ## return indexes where it matches...
+            
+            top = self.first_occur[symbol] + self.count[symbol][top]
+            bottom = self.first_occur[symbol] + self.count[symbol][bottom]
+            pattern = pattern[:-1]
+        return 0
+    
+    def multiple_pattern_match(self, patterns, SA):
+        """Returns a set of start indexes of all matches in text (all in one list right now)"""
+        
+        matches = []
+        for pattern in patterns:
+            matches.append(self.pattern_match(pattern))
+        starts = set()
+        for (top, bottom) in matches:
+            for i in range(top, bottom):
+                starts.add(SA[i])
+        return sorted(starts)
+ 
+###
+
+with open("data/rosalind_ba9h.txt") as infile:
+    dna = dnaSequence(infile.readline().strip())
+    patterns = [p.strip() for p in infile.readlines()]
+
+dna_bw = BurrowsWheeler(dna.bwt)
+matches = dna_bw.multiple_pattern_match(patterns, dna.sa)
+
+with open("data/rosalind_ba9h_out.txt", 'w') as outfile:
+    outfile.write(' '.join(str(x) for x in matches))
